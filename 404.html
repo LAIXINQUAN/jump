@@ -120,20 +120,8 @@ async function init() {
     '<div class="jump-title">即将跳转至「' + escapeHtml(item.name) + '」</div>' +
     '<div class="jump-dest">本页仅作为中转，接下来将前往以下网址：</div>' +
     '<div class="jump-url">' + escapeHtml(target) + '</div>' +
-    '<div class="jump-count">将在 <b id="jumpCount">' + SITE_CONFIG.jumpSeconds + '</b> 秒后自动跳转</div>' +
-    '<a class="btn btn-primary" href="' + escapeHtml(target) + '" rel="noopener">立即前往</a>';
-
-  // 倒计时
-  let remain = SITE_CONFIG.jumpSeconds || 5;
-  const countEl = document.getElementById('jumpCount');
-  const timer = setInterval(function () {
-    remain--;
-    if (countEl) countEl.textContent = remain;
-    if (remain <= 0) {
-      clearInterval(timer);
-      location.href = target;
-    }
-  }, 1000);
+    '<div class="jump-dest">点击下方按钮即可前往目标网址：</div>' +
+    '<a class="btn btn-primary" href="' + escapeHtml(target) + '" rel="noopener">点击前往</a>';
 }
 
 /**

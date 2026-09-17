@@ -14,8 +14,5 @@ window.SITE_CONFIG = {
   linksPath: 'links.json',    // 存放跳转链接数据的文件
 
   // 管理密码（SHA-256 十六进制哈希）。默认密码：85261190
-  adminHash: 'd65ae4f3df08e55f4740a35c40a5dda46bfce17dbca0fbc0e08bf3fc8def94b1',
-
-  // 中转页倒计时秒数
-  jumpSeconds: 5
+  adminHash: 'd65ae4f3df08e55f4740a35c40a5dda46bfce17dbca0fbc0e08bf3fc8def94b1'
 };

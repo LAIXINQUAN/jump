@@ -135,8 +135,6 @@ input { font-family: inherit; }
 .jump-title { font-size: 34px; font-weight: 800; color: var(--text); margin-bottom: 12px; }
 .jump-dest { font-size: 16px; color: var(--text-secondary); margin-bottom: 8px; }
 .jump-url { font-size: 13px; color: var(--accent); word-break: break-all; margin-bottom: 28px; }
-.jump-count { font-size: 15px; color: var(--text-secondary); margin-bottom: 24px; }
-.jump-count b { color: var(--accent); font-size: 20px; }
 
 /* 移动端 */
 @media (max-width: 520px) {
