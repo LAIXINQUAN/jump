@@ -121,6 +121,8 @@ function auth(token) {
 /** 渲染链接列表 */
 function renderList() {
   const box = document.getElementById('linkList');
+  // 先清空旧内容，避免每次渲染重复追加已有行
+  box.innerHTML = '';
   document.getElementById('countLabel').textContent = links.length;
   if (!links.length) {
     box.innerHTML = '<div class="empty">暂无跳转项，使用上方表单添加。</div>';
