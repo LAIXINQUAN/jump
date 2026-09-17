@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#0f1115">
+<meta name="robots" content="noindex">
+<title>后台管理 · 公益网页跳转站</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<main class="wrap">
+  <header class="topbar">
+    <div class="brand"><i>↗</i>公益网页跳转站 · 管理</div>
+    <a href="./">查看站点</a>
+  </header>
+
+  <!-- 登录界面 -->
+  <section class="card" id="loginBox">
+    <h1 class="card-title">管理登录</h1>
+    <p class="card-sub">请输入管理密码后进入后台。</p>
+    <div class="field">
+      <label>管理密码</label>
+      <input type="password" id="loginPwd" placeholder="请输入管理密码" autocomplete="off">
+    </div>
+    <button class="btn btn-primary" id="loginBtn" style="width:100%">登录</button>
+  </section>
+
+  <!-- 后台主界面 -->
+  <section class="card" id="adminBox" style="display:none">
+    <h1 class="card-title">管理后台</h1>
+    <p class="card-sub">新建 / 删除跳转项，改动后点击「保存到 GitHub」生效。</p>
+
+    <!-- GitHub Token 配置 -->
+    <div class="field">
+      <label>GitHub 个人访问令牌（Token，仅保存在本浏览器，用于写 links.json）</label>
+      <input type="password" id="tokenInput" placeholder="ghp_..." autocomplete="off">
+    </div>
+    <p style="font-size:12px;color:var(--text-muted);margin:-8px 0 20px;">
+      需有仓库写入权限。生成方式：GitHub → Settings → Developer settings → Personal access tokens。
+    </p>
+
+    <!-- 新建表单 -->
+    <div class="field">
+      <label>新建跳转项 — 名称</label>
+      <input type="text" id="newName" placeholder="例如：儿童失踪预警平台">
+    </div>
+    <div class="field">
+      <label>新建跳转项 — 网址（https://…）</label>
+      <input type="text" id="newUrl" placeholder="https://example.com">
+    </div>
+    <button class="btn btn-ghost" id="addBtn" style="width:100%;margin-bottom:24px">＋ 添加（未保存）</button>
+
+    <!-- 当前链接列表 -->
+    <div style="font-size:13px;color:var(--text-muted);margin-bottom:10px;">
+      当前跳转项（<span id="countLabel">0</span>）
+    </div>
+    <div id="linkList" class="link-list">
+      <div class="empty">正在加载…</div>
+    </div>
+
+    <!-- 操作栏 -->
+    <div style="display:flex;gap:10px;margin-top:20px;">
+      <button class="btn btn-ghost" id="reloadBtn" style="flex:1">重新加载</button>
+      <button class="btn btn-primary" id="saveBtn" style="flex:2">保存到 GitHub</button>
+    </div>
+  </section>
+</main>
+
+<div class="toast" id="toast"></div>
+
+<script src="config.js"></script>
+<script>
+/**
+ * 后台管理脚本
+ * 1. 管理密码登录（前端 SHA-256 校验）
+ * 2. 加载 links.json，支持新建 / 删除
+ * 3. 通过 GitHub API 将改动写回 links.json（需站长提供写入权限的 Token）
+ */
+
+// ===== 全局状态 =====
+const links = [];          // 当前内存中的链接数组
+const cfg = window.SITE_CONFIG;
+
+/** 简易通知条 */
+function showToast(msg, type) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast show ' + (type || '');
+  clearTimeout(t._timer);
+  t._timer = setTimeout(function () { t.className = 'toast'; }, 2600);
+}
+
+/** 计算字符串的 SHA-256 十六进制哈希（用于密码校验） */
+async function sha256(text) {
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
+  return Array.from(new Uint8Array(buf)).map(function (b) { return b.toString(16).padStart(2, '0'); }).join('');
+}
+
+/** HTML 转义 */
+function escapeHtml(str) {
+  return String(str || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+/** GitHub API 请求头 */
+function auth(token) {
+  return { Authorization: 'token ' + token, 'User-Agent': 'jump' };
+}
+
+/** 渲染链接列表 */
+function renderList() {
+  const box = document.getElementById('linkList');
+  document.getElementById('countLabel').textContent = links.length;
+  if (!links.length) {
+    box.innerHTML = '<div class="empty">暂无跳转项，使用上方表单添加。</div>';
+    return;
+  }
+  links.slice().sort(function (a, b) { return a.id - b.id; }).forEach(function (item) {
+    const row = document.createElement('div');
+    row.className = 'link-item';
+    row.innerHTML =
+      '<span class="link-id">' + escapeHtml(item.id) + '</span>' +
+      '<span class="link-info">' +
+        '<span class="link-name">' + escapeHtml(item.name) + '</span>' +
+        '<div class="link-url">' + escapeHtml(item.url) + '</div>' +
+      '</span>';
+    const del = document.createElement('button');
+    del.className = 'btn btn-danger';
+    del.style.padding = '6px 14px';
+    del.style.fontSize = '12px';
+    del.textContent = '删除';
+    del.addEventListener('click', function () { removeItem(item.id); });
+    row.appendChild(del);
+    box.appendChild(row);
+  });
+}
+
+/** 删除某个 id 的条目（内存） */
+function removeItem(id) {
+  const idx = links.findIndex(function (x) { return Number(x.id) === id; });
+  if (idx >= 0) { links.splice(idx, 1); renderList(); showToast('已删除，记得保存', ''); }
+}
+
+/** 添加新条目（内存），id 取当前最大值 +1 */
+function addItem() {
+  const name = document.getElementById('newName').value.trim();
+  const url = document.getElementById('newUrl').value.trim();
+  if (!name || !url) { showToast('请填写名称和网址', 'error'); return; }
+  const maxId = links.reduce(function (m, x) { return Math.max(m, Number(x.id) || 0); }, 0);
+  links.push({ id: maxId + 1, name: name, url: url });
+  document.getElementById('newName').value = '';
+  document.getElementById('newUrl').value = '';
+  renderList();
+  showToast('已添加 #' + (maxId + 1) + '，记得保存', '');
+}
+
+/**
+ * 通过 GitHub API 保存 links.json
+ * @param {string} token GitHub 写入令牌
+ */
+async function saveLinks(token) {
+  const api = 'https://api.github.com/repos/' + cfg.owner + '/' + cfg.repo + '/contents/' + cfg.linksPath;
+
+  // 1) 获取当前文件 sha（更新文件必须携带）
+  const headRes = await fetch(api, { headers: auth(token) });
+  const meta = await headRes.json();
+  if (!meta.sha) throw new Error(meta.message || '无法读取当前 links.json');
+
+  // 2) 组装新内容并提交（UTF-8 安全的 base64）
+  const json = JSON.stringify(links, null, 2) + '\n';
+  const content = btoa(unescape(encodeURIComponent(json)));
+
+  const putRes = await fetch(api, {
+    method: 'PUT',
+    headers: Object.assign(auth(token), { 'Content-Type': 'application/json' }),
+    body: JSON.stringify({
+      message: 'update links',
+      content: content,
+      sha: meta.sha,
+      branch: cfg.branch
+    })
+  });
+  if (!putRes.ok) {
+    const err = await putRes.json();
+    throw new Error(err.message || '保存失败（HTTP ' + putRes.status + '）');
+  }
+  return true;
+}
+
+// ===== 事件绑定 =====
+document.addEventListener('DOMContentLoaded', function () {
+  const loginBtn = document.getElementById('loginBtn');
+  const loginPwd = document.getElementById('loginPwd');
+
+  // 登录：校验密码哈希
+  loginBtn.addEventListener('click', async function () {
+    const h = await sha256(loginPwd.value || '');
+    if (h === cfg.adminHash) {
+      document.getElementById('loginBox').style.display = 'none';
+      document.getElementById('adminBox').style.display = '';
+      // 读取本地保存的 token（如之前填过）
+      document.getElementById('tokenInput').value = localStorage.getItem('jump_token') || '';
+      loadLinks();
+    } else {
+      showToast('密码错误', 'error');
+    }
+  });
+  // 回车登录
+  loginPwd.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') loginBtn.click();
+  });
+
+  // 加载 links.json 到内存
+  async function loadLinks() {
+    const box = document.getElementById('linkList');
+    try {
+      const res = await fetch('links.json', { cache: 'no-store' });
+      const data = await res.json();
+      links.length = 0;
+      Array.prototype.push.apply(links, Array.isArray(data) ? data : []);
+      renderList();
+    } catch (e) {
+      box.innerHTML = '<div class="empty">加载失败</div>';
+    }
+  }
+
+  // 添加
+  document.getElementById('addBtn').addEventListener('click', addItem);
+
+  // 重新加载
+  document.getElementById('reloadBtn').addEventListener('click', loadLinks);
+
+  // 保存到 GitHub
+  document.getElementById('saveBtn').addEventListener('click', async function () {
+    const token = document.getElementById('tokenInput').value.trim();
+    if (!token) { showToast('请先填写 GitHub Token', 'error'); return; }
+    // 暂存 token 到本浏览器（便于下次使用）
+    localStorage.setItem('jump_token', token);
+    const btn = document.getElementById('saveBtn');
+    btn.disabled = true;
+    btn.textContent = '保存中…';
+    try {
+      await saveLinks(token);
+      showToast('保存成功，稍候生效', 'success');
+    } catch (e) {
+      showToast('保存失败：' + (e.message || e), 'error');
+    } finally {
+      btn.disabled = false;
+      btn.textContent = '保存到 GitHub';
+    }
+  });
+});
+</script>
+</body>
+</html>

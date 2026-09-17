@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#0f1115">
+<meta name="robots" content="noindex">
+<title>您即将离开 · 公益网页跳转站</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- 本页为 GitHub Pages 的 404 兜底页。
+     访问 项目名/数字（如 /jump/1）时，服务器找不到该路径即返回本页。
+     前端脚本读取路径末尾数字，在 links.json 中查找对应条目并执行中转跳转。 -->
+
+<main class="wrap">
+  <header class="topbar">
+    <div class="brand"><i>↗</i>公益网页跳转站</div>
+    <a href="./">返回首页</a>
+  </header>
+
+  <section class="card jump-hero" id="jumpBox">
+    <!-- 由脚本动态填充 -->
+  </section>
+</main>
+
+<script src="config.js"></script>
+<script>
+/**
+ * 中转页脚本：解析路径末尾数字，读取 links.json 查找条目，
+ * 显示「您即将离开，跳转至 XXX」并在倒计时结束后跳转。
+ */
+document.addEventListener('DOMContentLoaded', init);
+
+/**
+ * HTML 转义，防止数据中的特殊字符破坏结构
+ * @param {string} str 原始文本
+ * @returns {string} 转义后的安全文本
+ */
+function escapeHtml(str) {
+  return String(str || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+/**
+ * 校验并规范化跳转目标 URL，仅允许 http/https 协议
+ * @param {string} url 原始地址
+ * @returns {string|null} 规范化后的地址，非法则返回 null
+ */
+function safeUrl(url) {
+  if (!url) return null;
+  try {
+    const u = new URL(url);
+    if (u.protocol === 'http:' || u.protocol === 'https:') return u.href;
+    return null;
+  } catch (e) {
+    return null;
+  }
+}
+
+/**
+ * 启动中转跳转：渲染提示 + 倒计时后跳转
+ */
+async function init() {
+  const box = document.getElementById('jumpBox');
+  if (!box) return;
+
+  // 从路径末尾提取数字（如 /jump/12 → 12）
+  const m = location.pathname.match(/(\d+)\/?$/);
+  const id = m ? parseInt(m[1], 10) : null;
+
+  let item = null;
+  try {
+    const res = await fetch('links.json', { cache: 'no-store' });
+    const links = await res.json();
+    if (Array.isArray(links)) {
+      item = links.find(function (x) { return Number(x.id) === id; });
+    }
+  } catch (e) {
+    /* 数据加载失败，按未找到处理 */
+  }
+
+  if (!item) {
+    box.innerHTML =
+      '<div class="jump-badge">404</div>' +
+      '<div class="jump-title">没有找到该跳转项</div>' +
+      '<div class="jump-dest">该链接可能已被删除或编号不存在。</div>' +
+      '<a class="btn btn-primary" href="./">返回首页</a>';
+    return;
+  }
+
+  const target = safeUrl(item.url);
+  if (!target) {
+    box.innerHTML =
+      '<div class="jump-badge">提示</div>' +
+      '<div class="jump-title">该链接地址无效</div>' +
+      '<div class="jump-dest">目标地址不是合法的 http/https 链接，请联系管理员。</div>' +
+      '<a class="btn btn-primary" href="./">返回首页</a>';
+    return;
+  }
+
+  // 渲染中转提示
+  box.innerHTML =
+    '<div class="jump-badge">您即将离开</div>' +
+    '<div class="jump-title">即将跳转至「' + escapeHtml(item.name) + '」</div>' +
+    '<div class="jump-dest">本页仅作为中转，接下来将前往以下网址：</div>' +
+    '<div class="jump-url">' + escapeHtml(target) + '</div>' +
+    '<div class="jump-count">将在 <b id="jumpCount">' + SITE_CONFIG.jumpSeconds + '</b> 秒后自动跳转</div>' +
+    '<a class="btn btn-primary" href="' + escapeHtml(target) + '" rel="noopener">立即前往</a>';
+
+  // 倒计时
+  let remain = SITE_CONFIG.jumpSeconds || 5;
+  const countEl = document.getElementById('jumpCount');
+  const timer = setInterval(function () {
+    remain--;
+    if (countEl) countEl.textContent = remain;
+    if (remain <= 0) {
+      clearInterval(timer);
+      location.href = target;
+    }
+  }, 1000);
+}
+</script>
+</body>
+</html>
