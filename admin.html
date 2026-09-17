@@ -51,6 +51,13 @@
     </div>
     <button class="btn btn-ghost" id="addBtn" style="width:100%;margin-bottom:24px">＋ 添加（未保存）</button>
 
+    <!-- 跳转链接格式提示 -->
+    <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 14px;font-size:12px;color:var(--text-secondary);margin-bottom:14px;line-height:1.7;">
+      <div style="font-weight:600;color:var(--text);margin-bottom:2px;">如何分享跳转链接</div>
+      每个跳转项对应一个中转链接：<code style="color:var(--accent-light);">https://laixinquan.github.io/<b style="color:var(--accent)">jump</b>/<b style="color:var(--accent)">编号</b></code><br>
+      把链接中的「编号」替换为上方列表中该项的 ID 即可（例如 ID 为 2 的项 → <code style="color:var(--accent-light)">https://laixinquan.github.io/jump/2</code>）。
+    </div>
+
     <!-- 当前链接列表 -->
     <div style="font-size:13px;color:var(--text-muted);margin-bottom:10px;">
       当前跳转项（<span id="countLabel">0</span>）
